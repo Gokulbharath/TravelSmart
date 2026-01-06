@@ -64,6 +64,7 @@ export const optimizeRoute = async (req, res) => {
       optimizedPath: optimizedPath, // Array of location names in order
       algorithm: 'Dijkstra',
       totalDistance: distance, // Actual numeric distance for calculations
+      currency: 'INR',
     };
 
     res.status(200).json({

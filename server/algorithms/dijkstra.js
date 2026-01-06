@@ -315,25 +315,29 @@ export const calculateETA = (durationString) => {
   });
 };
 
+const USD_TO_INR = 83;
+
 /**
- * Calculate fuel cost estimate (for car mode)
+ * Calculate fuel cost estimate (for car mode) in INR
  */
 export const calculateFuelCost = (distance, fuelPricePerKm = 0.12) => {
-  if (distance === Infinity) return '$0';
-  const cost = distance * fuelPricePerKm;
-  return `$${cost.toFixed(2)}`;
+  if (distance === Infinity) return 0;
+  const costUSD = distance * fuelPricePerKm;
+  return Math.round(costUSD * USD_TO_INR);
 };
 
 /**
- * Calculate toll cost (simplified - based on distance)
+ * Calculate toll cost (simplified - based on distance) in INR
  */
 export const calculateTollCost = (distance, transportMode) => {
-  if (distance === Infinity || transportMode !== 'car') return '$0';
+  if (distance === Infinity || transportMode !== 'car') return 0;
   
   // Assume toll every 50km, average $2 per toll
   const tolls = Math.floor(distance / 50);
-  const cost = tolls * 2;
+  const costUSD = tolls * 2;
   
-  return cost > 0 ? `$${cost}` : '$0';
+  return costUSD > 0 ? Math.round(costUSD * USD_TO_INR) : 0;
 };
+
+
 

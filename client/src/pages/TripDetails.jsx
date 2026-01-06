@@ -17,15 +17,25 @@ import Footer from '../components/Footer';
 import Button from '../components/Button';
 import ProcessingModal from '../components/ProcessingModal';
 import { mockAPI } from '../utils/mockAPI';
+import { getMultipleRoutes, geocodeAddress } from '../utils/googleMaps';
+import { useJsApiLoader } from '@react-google-maps/api';
+import { formatINR } from '../utils/currency.js';
 
 const TripDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const { isLoaded: mapsLoaded } = useJsApiLoader({
+    googleMapsApiKey: apiKey || '',
+    libraries: ['places', 'directions', 'geocoding'],
+  });
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizedData, setOptimizedData] = useState(null);
   const [optimizationError, setOptimizationError] = useState('');
+  const [googleRouteData, setGoogleRouteData] = useState(null);
+  const [useGoogle, setUseGoogle] = useState(true);
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -40,23 +50,72 @@ const TripDetails = () => {
   }, [id]);
 
   const handleOptimizeRoute = async () => {
+    if (!mapsLoaded || !window.google) {
+      setOptimizationError('Google Maps not loaded. Please wait...');
+      return;
+    }
+
     setOptimizing(true);
     setOptimizationError('');
     setOptimizedData(null);
+    setGoogleRouteData(null);
 
-    const response = await mockAPI.optimizeRoute({
-      source: trip.source,
-      destination: trip.destination,
-      transportMode: trip.transportMode,
-    });
+    try {
+      if (useGoogle) {
+        try {
+          const sourceGeo = await geocodeAddress(trip.source);
+          const destGeo = await geocodeAddress(trip.destination);
+          
+          const googleRoutesResult = await getMultipleRoutes(
+            sourceGeo.address,
+            destGeo.address,
+            trip.transportMode
+          );
+
+          if (googleRoutesResult?.success && googleRoutesResult.routes?.length > 0) {
+            const fastestRoute = googleRoutesResult.routes.reduce((best, route) => {
+              if (!best || (route.durationValue < best.durationValue && route.durationValue > 0)) {
+                return route;
+              }
+              return best;
+            }, null);
+
+            if (fastestRoute) {
+              setGoogleRouteData({
+                distance: fastestRoute.distance,
+                duration: fastestRoute.duration,
+                eta: fastestRoute.eta,
+                fuelCost: fastestRoute.fuelCost,
+                tollCost: fastestRoute.tollCost,
+                algorithm: fastestRoute.algorithm,
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Google Maps route error:', error);
+        }
+      }
+
+      const dijkstraResponse = await mockAPI.optimizeRoute({
+        source: trip.source,
+        destination: trip.destination,
+        transportMode: trip.transportMode,
+      });
+
+      if (dijkstraResponse.success) {
+        const route = dijkstraResponse.optimizedRoute;
+        setOptimizedData({
+          ...route,
+          algorithm: 'Dijkstra (Shortest Path)',
+          fuelCost: typeof route.fuelCost === 'number' ? formatINR(route.fuelCost) : route.fuelCost,
+          tollCost: typeof route.tollCost === 'number' ? formatINR(route.tollCost) : route.tollCost,
+        });
+      }
+    } catch (error) {
+      setOptimizationError(error.message || 'Failed to optimize route');
+    }
 
     setOptimizing(false);
-
-    if (response.success) {
-      setOptimizedData(response.optimizedRoute);
-    } else {
-      setOptimizationError(response.message || 'Failed to optimize route');
-    }
   };
 
   const handleDelete = async () => {
@@ -124,7 +183,9 @@ const TripDetails = () => {
             </div>
             <div className="flex space-x-2">
               <Button
-                onClick={() => navigate(`/map-view/${trip.id}`)}
+                onClick={() => {
+                  navigate(`/map-view/${trip.id}`);
+                }}
                 variant="primary"
               >
                 View on Map
@@ -221,16 +282,65 @@ const TripDetails = () => {
                 </div>
               )}
 
+              {googleRouteData && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                  <div className="flex items-start mb-4">
+                    <Zap className="w-6 h-6 text-blue-600 mr-3 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-blue-900">
+                        Google Maps Route
+                      </h3>
+                      <p className="text-blue-700 text-sm mt-1">
+                        {googleRouteData.algorithm}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                    <div className="bg-white rounded p-3">
+                      <p className="text-xs text-gray-600 mb-1">Distance</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {googleRouteData.distance || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-3">
+                      <p className="text-xs text-gray-600 mb-1">Duration</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {googleRouteData.duration || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-3">
+                      <p className="text-xs text-gray-600 mb-1">ETA</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {googleRouteData.eta || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-3">
+                      <p className="text-xs text-gray-600 mb-1">Fuel Cost</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {googleRouteData.fuelCost || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {googleRouteData.tollCost && (
+                    <div className="mt-4 text-sm text-gray-700">
+                      <strong>Toll Cost:</strong> {googleRouteData.tollCost}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {optimizedData && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
                   <div className="flex items-start mb-4">
                     <Zap className="w-6 h-6 text-green-600 mr-3 mt-0.5" />
                     <div className="flex-1">
                       <h3 className="text-lg font-bold text-green-900">
-                        Route Optimized!
+                        Dijkstra Algorithm Route
                       </h3>
                       <p className="text-green-700 text-sm mt-1">
-                        Optimized using {optimizedData.algorithm || 'Dijkstra'} algorithm
+                        {optimizedData.algorithm}
                       </p>
                     </div>
                   </div>
@@ -336,9 +446,25 @@ const TripDetails = () => {
 
               <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-md p-6 text-white">
                 <h3 className="text-lg font-bold mb-4">Route Optimization</h3>
-                {!optimizedData ? (
+                <div className="mb-4">
+                  <label className="flex items-center space-x-2 cursor-pointer mb-2">
+                    <input
+                      type="checkbox"
+                      checked={useGoogle}
+                      onChange={(e) => setUseGoogle(e.target.checked)}
+                      className="w-4 h-4 rounded focus:ring-2 focus:ring-white"
+                    />
+                    <span className="text-sm text-blue-100">Use Google Maps (Traffic-aware)</span>
+                  </label>
+                  <p className="text-xs text-blue-200 ml-6">
+                    {useGoogle 
+                      ? 'Will calculate both Google Maps and Dijkstra routes'
+                      : 'Will calculate only Dijkstra algorithm route'}
+                  </p>
+                </div>
+                {!optimizedData && !googleRouteData ? (
                   <p className="text-sm text-blue-100 mb-6">
-                    Click the button below to calculate the optimal route using Dijkstra's algorithm.
+                    Click the button below to calculate the optimal route.
                   </p>
                 ) : (
                   <p className="text-sm text-blue-100 mb-6">
@@ -354,7 +480,7 @@ const TripDetails = () => {
                   className="bg-white text-blue-600 hover:bg-blue-50"
                 >
                   <Zap className="w-4 h-4 mr-2 inline" />
-                  {optimizing ? 'Optimizing...' : optimizedData ? 'Re-optimize Route' : 'Optimize Route'}
+                  {optimizing ? 'Optimizing...' : optimizedData || googleRouteData ? 'Re-optimize Route' : 'Optimize Route'}
                 </Button>
               </div>
 

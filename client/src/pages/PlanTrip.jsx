@@ -15,6 +15,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
 import ProcessingModal from '../components/ProcessingModal';
+import PlacesAutocomplete from '../components/PlacesAutocomplete';
 import { useAuth } from '../context/AuthContext';
 import { mockAPI } from '../utils/mockAPI';
 
@@ -141,15 +142,13 @@ const PlanTrip = () => {
                     Source Location
                   </label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10 pointer-events-none" />
+                    <PlacesAutocomplete
                       name="source"
                       value={formData.source}
                       onChange={handleChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Starting point"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -159,15 +158,13 @@ const PlanTrip = () => {
                     Destination Location
                   </label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-600" />
-                    <input
-                      type="text"
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-600 z-10 pointer-events-none" />
+                    <PlacesAutocomplete
                       name="destination"
                       value={formData.destination}
                       onChange={handleChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Where to?"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
